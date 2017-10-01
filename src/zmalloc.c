@@ -34,7 +34,9 @@
 /* This function provide us access to the original libc free(). This is useful
  * for instance to free results obtained by backtrace_symbols(). We need
  * to define this function before including zmalloc.h that may shadow the
- * free implementation if we use jemalloc or another non standard allocator. */
+ * free implementation if we use jemalloc or another non standard allocator. 
+ * 在头文件引入之前定义它，那它只能链接libc 的free
+ * */
 void zlibc_free(void *ptr) {
     free(ptr);
 }
@@ -55,7 +57,7 @@ void zlibc_free(void *ptr) {
 #endif
 #endif
 
-/* Explicitly override malloc/free etc when using tcmalloc. */
+/* Explicitly override malloc/free etc when using tcmalloc. 用jemalloc不需要显式覆盖吗？ */
 #if defined(USE_TCMALLOC)
 #define malloc(size) tc_malloc(size)
 #define calloc(count,size) tc_calloc(count,size)

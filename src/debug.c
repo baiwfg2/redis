@@ -645,7 +645,7 @@ void _serverPanic(const char *file, int line, const char *msg, ...) {
     serverLog(LL_WARNING,"(forcing SIGSEGV in order to print the stack trace)");
 #endif
     serverLog(LL_WARNING,"------------------------------------------------");
-    *((char*)-1) = 'x';
+    *((char*)-1) = 'x';//人为地做一个segv fault ?
 }
 
 void bugReportStart(void) {

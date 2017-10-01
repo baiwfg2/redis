@@ -756,7 +756,7 @@ void trackInstantaneousMetric(int metric, long long current_reading) {
     server.inst_metric[metric].samples[server.inst_metric[metric].idx] =
         ops_sec;
     server.inst_metric[metric].idx++;
-    server.inst_metric[metric].idx %= STATS_METRIC_SAMPLES;
+    server.inst_metric[metric].idx %= STATS_METRIC_SAMPLES;//默认取16个样本点
     server.inst_metric[metric].last_sample_time = mstime();
     server.inst_metric[metric].last_sample_count = current_reading;
 }
@@ -3706,12 +3706,21 @@ int main(int argc, char **argv) {
 #ifdef INIT_SETPROCTITLE_REPLACEMENT
     spt_init(argc, argv);
 #endif
+	/*
+	 * 当 locale 为 NULL 时，函数只做取回当前 locale 操作，通过返回值传出，并不改变当前 locale。
+	 * 当 locale 为 "" 时，根据环境的设置来设定 locale，检测顺序是：环境变量 LC_ALL，每个单独的locale分类LC_*，最后是 LANG 变量。
+	 * 为了使程序可以根据环境来改变活动 locale，一般都在程序的初始化阶段加入下面代码：setlocale(LC_ALL, "")。
+	 * 当C语言程序初始化时（刚进入到 main() 时），locale 被初始化为默认的 C locale，其采用的字符编码是所有本地 ANSI 字符集编码的
+	 * 公共部分，是用来书写C语言源程序的最小字符集（所以才起locale名叫：C）。
+	 * 当用 setlocale() 设置活动 locale 时，如果成功，会返回当前活动 locale 的全名称；如果失败，会返回 NULL。
+	 */
     setlocale(LC_COLLATE,"");
-    zmalloc_set_oom_handler(redisOutOfMemoryHandler);
-    srand(time(NULL)^getpid());
+    zmalloc_set_oom_handler(redisOutOfMemoryHandler);//当zmalloc分配失败时，调用此handler
+    srand(time(NULL)^getpid());//Q:为什么要与getpid ??
     gettimeofday(&tv,NULL);
     char hashseed[16];
-    getRandomHexChars(hashseed,sizeof(hashseed));
+    getRandomHexChars(hashseed,sizeof(hashseed));//获取run id sha1
+	printf("hashseed=%s\n",hashseed);
     dictSetHashFunctionSeed((uint8_t*)hashseed);
     server.sentinel_mode = checkForSentinelMode(argc,argv);
     initServerConfig();
