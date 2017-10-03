@@ -47,8 +47,11 @@ void zlibc_free(void *ptr) {
 #include "zmalloc.h"
 #include "atomicvar.h"
 
+//PREFIX_SIZE用来记录malloc拿到的内存块的size，如果使用了google的tcmalloc库或者
+//苹果的环境，可以使用系统函数获得内存块的大小，就不用这个区域来记录
+
 #ifdef HAVE_MALLOC_SIZE
-#define PREFIX_SIZE (0)
+#define PREFIX_SIZE (0) //如果使用的库能提供分配的空间大小，则不需要自行添加前缀
 #else
 #if defined(__sun) || defined(__sparc) || defined(__sparc__)
 #define PREFIX_SIZE (sizeof(long long))
@@ -57,7 +60,7 @@ void zlibc_free(void *ptr) {
 #endif
 #endif
 
-/* Explicitly override malloc/free etc when using tcmalloc. 用jemalloc不需要显式覆盖吗？ */
+/* Explicitly override malloc/free etc when using tcmalloc. */
 #if defined(USE_TCMALLOC)
 #define malloc(size) tc_malloc(size)
 #define calloc(count,size) tc_calloc(count,size)
@@ -97,6 +100,7 @@ static void zmalloc_default_oom(size_t size) {
 static void (*zmalloc_oom_handler)(size_t) = zmalloc_default_oom;
 
 void *zmalloc(size_t size) {
+	////实际申请size+PREFIX_SIZE大小的内存空间，其中，PREFIX_SIZE的空间用来记录内存块大小
     void *ptr = malloc(size+PREFIX_SIZE);
 
     if (!ptr) zmalloc_oom_handler(size);
@@ -175,13 +179,14 @@ void *zrealloc(void *ptr, size_t size) {
  * malloc itself, given that in that case we store a header with this
  * information as the first bytes of every allocation. */
 #ifndef HAVE_MALLOC_SIZE
+//和zmalloc_free一样，传过来的ptr应该是指向真实data块的指针
 size_t zmalloc_size(void *ptr) {
     void *realptr = (char*)ptr-PREFIX_SIZE;
     size_t size = *((size_t*)realptr);
     /* Assume at least that all the allocations are padded at sizeof(long) by
      * the underlying allocator. */
     if (size&(sizeof(long)-1)) size += sizeof(long)-(size&(sizeof(long)-1));
-    return size+PREFIX_SIZE;
+    return size+PREFIX_SIZE; //这个方法返回的size也包括PREFIX_SIZE那个单元的大小
 }
 #endif
 
@@ -237,6 +242,7 @@ void zmalloc_set_oom_handler(void (*oom_handler)(size_t)) {
 #include <sys/stat.h>
 #include <fcntl.h>
 
+//https://en.wikipedia.org/wiki/Resident_set_size
 size_t zmalloc_get_rss(void) {
     int page = sysconf(_SC_PAGESIZE);
     size_t rss;

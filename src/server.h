@@ -581,6 +581,14 @@ typedef struct RedisModuleDigest {
 #define LRU_CLOCK_RESOLUTION 1000 /* LRU clock resolution in ms */
 
 #define OBJ_SHARED_REFCOUNT INT_MAX
+
+/*
+ 一般来说，这个结构可以代表所有的redis基本数据结构。type域可用来判断它是什么类型，refcount
+ 可实现引用计数,ptr指向真实的数据结构对象
+
+ redis对象被大量使用，但为避免间接访问开销，许多地方就直接使用动态字符串
+
+*/
 typedef struct redisObject {
     unsigned type:4;
     unsigned encoding:4;
