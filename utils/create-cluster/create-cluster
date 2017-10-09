@@ -16,13 +16,16 @@ fi
 
 # Computed vars
 ENDPORT=$((PORT+NODES))
+HOST=127.0.0.1
 
 if [ "$1" == "start" ]
 then
+	echo "Deleting existed intermidiate files"
+	rm -rf nodes* dump* *.log
     while [ $((PORT < ENDPORT)) != "0" ]; do
         PORT=$((PORT+1))
         echo "Starting $PORT"
-        ../../src/redis-server --port $PORT --cluster-enabled yes --cluster-config-file nodes-${PORT}.conf --cluster-node-timeout $TIMEOUT --appendonly yes --appendfilename appendonly-${PORT}.aof --dbfilename dump-${PORT}.rdb --logfile ${PORT}.log --daemonize yes
+        ../../src/redis-server --port $PORT --cluster-enabled yes --cluster-config-file nodes-${PORT}.conf --cluster-node-timeout $TIMEOUT --dbfilename dump-${PORT}.rdb --logfile ${PORT}.log --daemonize yes
     done
     exit 0
 fi
@@ -32,18 +35,62 @@ then
     HOSTS=""
     while [ $((PORT < ENDPORT)) != "0" ]; do
         PORT=$((PORT+1))
-        HOSTS="$HOSTS 127.0.0.1:$PORT"
+        HOSTS="$HOSTS $HOST:$PORT"
     done
-    ../../src/redis-trib.rb create --replicas $REPLICAS $HOSTS
+    echo yes | ../../src/redis-trib.rb create --replicas $REPLICAS $HOSTS
     exit 0
+fi
+
+if [ "$1" == "kill" ]; then
+	if [ "x$2" == "x" ]; then
+		echo "No port specified"
+		exit 1
+	fi
+	pid=`netstat -tlnup | grep "$2" | awk '{print $7}' | cut -d '/' -f1`
+	#rm -f nodes-$2.conf # DO NOT do this !
+	kill $pid
+fi
+
+if [ "$1" == "restart" ]; then
+	if [ "x$2" == "x" ]; then
+		echo "No port specified"
+		exit 1
+	fi
+	port=$2
+	../../src/redis-cli -h $HOST -p $port ping
+	if [ $? = 0 ];then echo "$port is alive";exit 0; fi
+
+	master_port=""
+	run_id=""
+	if [ $(($port<30004)) != 0 ];then
+		master_port=$((port+3))
+	else
+		master_port=$((port-3))
+	fi
+
+	p=30000
+	while [ $((p < ENDPORT)) != 0 ];do
+		p=$((p+1))
+		../../src/redis-cli -h $HOST -p $p ping
+		if [ $? = 0 ]; then
+			run_id=`../../src/redis-cli -h $HOST -p $p cluster nodes | grep "$master_port" | cut -d ' ' -f1`
+			break
+		fi
+	done
+	../../src/redis-server --port $port --cluster-enabled yes --cluster-config-file nodes-${port}.conf --cluster-node-timeout $TIMEOUT --dbfilename dump-${port}.rdb --logfile ${port}.log --daemonize yes
+	../../src/redis-trib.rb add-node $HOST:$port $HOST:$master_port
+	
+	# replicate from original slave whose port is 'port + 3' or 'port - 3'
+	../../src/redis-cli -h $HOST -p $port cluster replicate $run_id
 fi
 
 if [ "$1" == "stop" ]
 then
+	rm -rf nodes* dump* *.log
     while [ $((PORT < ENDPORT)) != "0" ]; do
         PORT=$((PORT+1))
         echo "Stopping $PORT"
-        ../../src/redis-cli -p $PORT shutdown nosave
+        ../../src/redis-cli $HOST -p $PORT shutdown nosave
     done
     exit 0
 fi
@@ -54,7 +101,7 @@ then
     while [ 1 ]; do
         clear
         date
-        ../../src/redis-cli -p $PORT cluster nodes | head -30
+        ../../src/redis-cli -h $HOST -p $PORT cluster nodes | head -30
         sleep 1
     done
     exit 0
@@ -72,7 +119,7 @@ if [ "$1" == "call" ]
 then
     while [ $((PORT < ENDPORT)) != "0" ]; do
         PORT=$((PORT+1))
-        ../../src/redis-cli -p $PORT $2 $3 $4 $5 $6 $7 $8 $9
+        ../../src/redis-cli -h $HOST -p $PORT $2 $3 $4 $5 $6 $7 $8 $9
     done
     exit 0
 fi
